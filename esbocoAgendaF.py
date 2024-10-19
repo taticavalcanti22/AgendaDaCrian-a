@@ -7,11 +7,13 @@ import sqlite3
 import json
 import os
 import locale
+from dados import BancoDados
 
 
 class AgendaApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.dados = BancoDados()
         self.title("Agenda da Criança")
         self.geometry("800x800")
         self.configure(bg="#f1be40")
@@ -20,8 +22,6 @@ class AgendaApp(tk.Tk):
 
             # Definindo o local para Português
         locale.setlocale(locale.LC_ALL, 'pt_BR')
-
-        self.atividades = []
 
         self.carregar_dados_crianca()
 
@@ -100,7 +100,7 @@ class AgendaApp(tk.Tk):
         self.btn_adicionar = tk.Button(self.frame_botoes, text="Adicionar Atividades", command=self.adicionar_atividade, bg="#4CAF50", fg="white", font=("Arial", 10))
         self.btn_adicionar.pack(side=tk.LEFT, padx=4)
 
-        self.btn_remover = tk.Button(self.frame_botoes, text="Remover Atividades", command=self.remover_atividade, bg="#F44336", fg="white", font=("Arial", 10))
+        self.btn_remover = tk.Button(self.frame_botoes, text="Remover Atividades", command=self.remover_atividade_selecionada, bg="#F44336", fg="white", font=("Arial", 10))
         self.btn_remover.pack(side=tk.LEFT, padx=4)
 
         self.btn_calendario = tk.Button(self.frame_botoes, text="Calendário do mês", command=self.mostrar_calendario, bg="#aa6925", fg="white", font=("Arial", 10))
@@ -113,49 +113,12 @@ class AgendaApp(tk.Tk):
             command=self.mostrar_estrelas, bg="#FF9800", fg="white", font=("Arial", 10))
         self.btn_ver_estrelas.pack(side=tk.LEFT, padx=4)
 
-        # Carregar atividades do banco de dados
-        self.atividades = self.carregar_atividades_db()
-        self.inicializar_banco()
-        self.carregar_atividades_db()
-        self.lista_atividade_db = ()
+        self.dados.criar_tabelas()
+        # Carregar atividades
+        self.carregar_atividades()
 
         self.total_estrelas = 0  # Iniciar com zero estrelas
-        self.criar_tabelas()  # Garantir que as tabelas existam
         self.carregar_total_estrelas()  # Carregar as estrelas do banco de dados ao iniciar
-
-    def inicializar_banco(self):
-        conn = sqlite3.connect('atividades.db')
-        cursor = conn.cursor()
-
-        # Cria a tabela se ela não existir
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS atividades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT,
-                data TEXT,
-                hora TEXT,
-                imagem TEXT,
-                estrelas INTEGER
-            )
-        ''')
-
-        conn.commit()
-        conn.close()
-
-    def atualizar_lista_atividades(self):
-        # Limpa a lista atual na interface (Listbox)
-        self.lista_atividades.delete(0, tk.END)
-
-        # Verifica se há atividades
-        if self.atividades:  # Garantir que a lista de atividades não seja None e que contenha atividades
-            for atividade in self.atividades:
-                # Adiciona as atividades no formato desejado na lista
-                self.lista_atividades.insert(
-                    tk.END, f"{atividade['nome']} - {atividade['data']} - {atividade['hora']} - {atividade['estrelas']} estrelas"
-                )
-        else:
-            # Se não houver atividades, exibe uma mensagem informando que não há atividades
-            self.lista_atividades.insert(tk.END, "Nenhuma atividade adicionada.")
 
     def salvar_dados_crianca(self):
         dados = {
@@ -210,76 +173,23 @@ class AgendaApp(tk.Tk):
             self.label_frase_boas_vindas.config(text=f"Olá, {self.nome_crianca}. O que vamos fazer hoje?")
         else:
             self.label_frase_boas_vindas.config(text=f"O que vamos fazer hoje?")
+ 
+    def carregar_atividades(self):
+        self.atividades = []
 
-    def criar_tabelas(self):
-        # Conectar ao banco de dados
-        conn = sqlite3.connect('atividades.db')
-        cursor = conn.cursor()
+        for atividade in self.dados.carregar_atividades_db():
+            self.adicionar_atividade_lista(atividade)
 
-        # Cria a tabela de atividades se não existir
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS atividades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT,
-                data TEXT,
-                hora TEXT,
-                imagem TEXT,
-                estrelas INTEGER
-            )
-        ''')
+    def adicionar_atividade_lista(self, atividade):
+        self.atividades.append(atividade)
+        self.lista_atividades.insert(tk.END, f"{atividade['nome']} - {atividade['data']} às {atividade['hora']}")
 
-        # Cria a tabela para o banco de estrelas se não existir
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS banco_estrelas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                total_estrelas INTEGER
-            )
-        ''')
-
-        # Inicializa o banco de estrelas, se necessário
-        cursor.execute("SELECT total_estrelas FROM banco_estrelas LIMIT 1")
-        if cursor.fetchone() is None:
-            cursor.execute("INSERT INTO banco_estrelas (total_estrelas) VALUES (0)")
-
-        conn.commit()
-        conn.close()
-
-    def carregar_atividades_db(self):
-        with sqlite3.connect('atividades.db') as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT nome, data, hora, imagem, estrelas FROM atividades")
-            for row in cursor.fetchall():
-                atividade = {
-                    'nome': row[0],
-                    'data': row[1],
-                    'hora': row[2],
-                    'imagem': row[3],
-                    'estrelas': row[4]
-                }
-                #self.atividades.append(atividade)  # Adiciona à lista de atividades
-                #self.lista_atividades.insert(tk.END, f"{atividade['nome']} - {atividade['data']} às {atividade['hora']}")
-
-    def salvar_atividade_db(self, atividade):
-        print("Função salvar_atividade_db foi chamada!")  # Diagnóstico inicial
-        try:
-            conn = sqlite3.connect('atividades.db')
-            cursor = conn.cursor()
-
-            cursor.execute('''
-                INSERT INTO atividades (nome, data, hora, imagem, estrelas)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (atividade['nome'], atividade['data'], atividade['hora'], atividade['imagem'], atividade['estrelas']))
-
-            conn.commit()
-            conn.close()
-
-            print(f"Atividade '{atividade['nome']}' salva com sucesso no banco de dados.")
+    def salvar_atividade(self, atividade):
+        if(self.dados.salvar_atividade_db(atividade)):
+            self.adicionar_atividade_lista(atividade)
             messagebox.showinfo("Sucesso", "Atividade salva com sucesso!")
-
-        except Exception as e:
-            print(f"Erro ao salvar atividade: {e}")
+        else:
             messagebox.showerror("Erro", f"Erro ao salvar atividade: {e}")
-
     def mostrar_calendario(self):
         print("Tentando abrir o calendário...")  # Mensagem de depuração
 
@@ -409,13 +319,9 @@ class AgendaApp(tk.Tk):
             'estrelas': estrelas
         }
 
-        # Adiciona a nova atividade à lista de atividades
-        if self.atividades is None:
-            self.atividades = []  # Garante que não seja None, apenas por segurança
-        self.atividades.append(nova_atividade)
-
+       
         # Salva a nova atividade no banco de dados
-        self.salvar_atividade_db(nova_atividade)
+        self.salvar_atividade(nova_atividade)
 
         # Fecha a janela de nova atividade após a confirmação
         self.janela_nova_atividade.destroy()
@@ -426,21 +332,6 @@ class AgendaApp(tk.Tk):
         if caminho_imagem:
             self.imagem_entry.delete(0, tk.END)
             self.imagem_entry.insert(0, caminho_imagem)
-
-    """def salvar_atividade_db(self, atividade):
-        conn = sqlite3.connect('atividades.db')
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            INSERT INTO atividades (nome, data, hora, imagem, estrelas) 
-            VALUES (?, ?, ?, ?, ?)
-        ''', (atividade['nome'], atividade['data'], atividade['hora'], atividade['imagem'], atividade['estrelas']))
-
-        conn.commit()
-        conn.close()
-
-        # Atualiza a interface após salvar no banco de dados
-        self.lista_atividades.insert(tk.END, f"{atividade['nome']} - {atividade['data']} às {atividade['hora']}")"""
 
     def formatar_data(self, event=None):
         entry_widget = event.widget
@@ -489,29 +380,32 @@ class AgendaApp(tk.Tk):
             self.imagem_entry.delete(0, tk.END)
             self.imagem_entry.insert(0, caminho_imagem)
 
-    def remover_atividade(self):
+    def remover_atividade_selecionada(self):
         selection = self.lista_atividades.curselection()
         if selection:
             indice = selection[0]
+            print(indice)
             atividade = self.atividades[indice]
             if atividade:
-                # Remove do banco de dados
-                self.remover_atividade_db(atividade)
-                # Remove da lista de atividades
-                self.atividades.remove(atividade)
-                # Remove da interface
-                self.lista_atividades.delete(indice)
-                messagebox.showinfo("Removido", f"Atividade '{atividade['nome']}' removida com sucesso.")
+                if(self.remover_atividade(atividade)):
+                    messagebox.showinfo("Removido", f"Atividade '{atividade['nome']}' removida com sucesso.")
             else:
                 messagebox.showerror("Erro", "Atividade não encontrada na lista.")
         else:
             messagebox.showwarning("Atenção", "Selecione uma atividade para remover.")
 
-    def remover_atividade_db(self, atividade):
-        with sqlite3.connect('atividades.db') as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM atividades WHERE nome = ?", (atividade['nome'],))
-            conn.commit()
+    def remover_atividade(self, atividade):
+        # Remove da interface
+        indice = self.atividades.index(atividade)
+        # Remove do banco de dados
+        self.dados.remover_atividade_db(atividade)
+        # Remove da lista de atividades
+        self.atividades.remove(atividade)
+        #remove da interface
+        self.lista_atividades.delete(indice)
+
+        return True
+
 
     def mostrar_quadro_rotina(self):
         quadro_janela = tk.Toplevel(self)
@@ -560,100 +454,25 @@ class AgendaApp(tk.Tk):
             messagebox.showerror("Erro", "O valor de estrelas deve ser um número.")
             return
 
-        # Incrementa as estrelas no total
-        self.total_estrelas += estrelas
-        self.atualizar_total_estrelas()  # Atualiza e salva o novo total de estrelas no banco
+        self.atualizar_total_estrelas(estrelas)  # Atualiza e salva o novo total de estrelas no banco
+                # Remover a atividade completada da lista de atividades
+        self.remover_atividade(atividade)
 
         messagebox.showinfo("Parabéns!", f"Você ganhou {estrelas} estrelas!")
 
-        # Remover a atividade completada da lista de atividades
-        indice = self.atividades.index(atividade)
-        self.atividades.remove(atividade)
-        self.lista_atividades.delete(indice)
-
-        # Remove a atividade completada do banco de dados
-        with sqlite3.connect('atividades.db') as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM atividades WHERE nome = ?", (atividade['nome'],))
-            conn.commit()
-
-    # def criar_tabelas(self):
-    #     # Abre a conexão com o banco de dados
-    #     conn = sqlite3.connect('atividades.db')
-    #     cursor = conn.cursor()
-
-    #     # Cria a tabela de atividades se não existir
-    #     cursor.execute('''
-    #         CREATE TABLE IF NOT EXISTS atividades (
-    #             id INTEGER PRIMARY KEY AUTOINCREMENT,
-    #             nome TEXT,
-    #             data TEXT,
-    #             hora TEXT,
-    #             imagem TEXT,
-    #             estrelas INTEGER
-    #         )
-    #     ''')
-
-    #     # Cria a tabela para o banco de estrelas se não existir
-    #     cursor.execute('''
-    #         CREATE TABLE IF NOT EXISTS banco_estrelas (
-    #             id INTEGER PRIMARY KEY AUTOINCREMENT,
-    #             total_estrelas INTEGER
-    #         )
-    #     ''')
-
-    #     # Verifica se já existe um registro de estrelas, caso contrário, inicializa com 0
-    #     cursor.execute("SELECT total_estrelas FROM banco_estrelas LIMIT 1")
-    #     if cursor.fetchone() is None:
-    #         cursor.execute("INSERT INTO banco_estrelas (total_estrelas) VALUES (0)")
-
-    #     # Confirma as alterações e fecha a conexão
-    #     conn.commit()
-    #     conn.close()
-
     def carregar_total_estrelas(self):
-        try:
-            conn = sqlite3.connect('atividades.db')
-            cursor = conn.cursor()
+        self.total_estrelas = self.dados.carregar_total_estrelas()
 
-            # Carrega o total de estrelas do banco de dados
-            cursor.execute("SELECT total_estrelas FROM banco_estrelas LIMIT 1")
-            resultado = cursor.fetchone()
+    def atualizar_total_estrelas(self, estrelas):
+        # Incrementa as estrelas no total
+        self.total_estrelas += estrelas
+        self.dados.atualizar_total_estrelas(self.total_estrelas)
 
-            if resultado:
-                self.total_estrelas = resultado[0]
-            else:
-                self.total_estrelas = 0  # Caso não haja nenhum valor, inicialize com 0
-
-        except Exception as e:
-            print(f"Erro ao carregar total de estrelas: {e}")
-
-        finally:
-            conn.close()
-
-    def atualizar_total_estrelas(self):
-        with sqlite3.connect('atividades.db') as conn:
-            cursor = conn.cursor()
-
-            # Atualiza o total de estrelas no banco de dados
-            cursor.execute("UPDATE banco_estrelas SET total_estrelas = ? WHERE id = 1", (self.total_estrelas,))
-
-            conn.commit()
 
     def mostrar_estrelas(self):
         # Mostra o total de estrelas acumuladas
         messagebox.showinfo("Total de Estrelas", f"Você tem um total de {self.total_estrelas} estrelas.")
 
-    def inicializar_banco_estrelas(self):
-        # Inicializa o banco de estrelas, garantindo que haja um registro inicial
-        with sqlite3.connect('atividades.db') as conn:
-            cursor = conn.cursor()
-
-            # Verifica se o banco de estrelas já tem um registro
-            cursor.execute("SELECT COUNT(*) FROM banco_estrelas")
-            if cursor.fetchone()[0] == 0:
-                cursor.execute("INSERT INTO banco_estrelas (total_estrelas) VALUES (0)")
-                conn.commit()
 
     def validar_data(self,data):
         try:
